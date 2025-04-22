@@ -1,0 +1,760 @@
+---
+title: "Project Assignment"
+author: "Ahsan Ahmad"
+date: "April 27, 2024"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = FALSE, warning = FALSE)
+```
+
+# Libraries
+
+```{r library}
+library(tidyverse)
+library(ggplot2)
+library(psych)
+library(caret)
+library(rminer)
+library(rmarkdown)
+library(matrixStats)
+library(knitr)
+library(rpart)
+library(RWeka)
+library(kernlab)
+library(arules)
+library(arulesViz)
+library(C50)
+library(scatterplot3d)
+library(e1071)
+library(tictoc)
+tic()
+library(kernlab)
+library(arules)
+library(arulesViz)
+library(partykit)
+library(tibble)
+```
+
+
+# Exploratory Data Analysis (EDA)
+
+## Set up, Data import, and Preparation
+
+Before proceeding with the analysis, it's essential to set up the working directory and import the data from a CSV file named 'NA_sales_filtered.csv'. This code chunk also inspects the structure of the dataset and converts string data into factors for further analysis.
+
+```{r Set up, data import and inspection}
+
+# Setting up working directory and importing data from a csv file
+
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+census <- read.csv(file = "census.csv", stringsAsFactors = TRUE)
+
+# Looking at the structure and summary of the data and transforming chr variables into factors by putting stringsAsFactors = TRUE above after looking at the structure and summary of dataset
+
+str(census)
+summary(census)
+
+# Target Variable is categorical, checking for imabalance in y using a Bar Plot, the imablance comes out to be 76 and 24% hence the majority classifier model will have an accuracy of 76%.
+
+ggplot(data = census,
+       mapping = aes(x = y)) +
+  geom_bar() +
+  labs(title = "Bar Plot of y and it's levels")
+
+census %>% select(y) %>% table()
+census %>% select(y) %>% table() %>% prop.table() %>% round(2) * 100
+
+```
+
+## Data Visualization of numeric variables
+
+This code chunk generates histograms and boxplots for six numeric variables (age, fnlwgt, education.num, capital.gain, capital.loss, and hours.per.week) in the census dataset, showing their distributions and central tendencies. It also computes deciles for each variable to analyze their distribution further. Additionally, it calculates the correlation matrix and displays correlations between these variables, helping to identify any significant relationships.
+
+Results:
+Age is distributed a bit right-skewed with most customer's in the range of 25 and 50 years old. Most readings for fnlwgt are distributed in between 100,000 and 250,000. Number of Eductaion years for customers mostly vary from 9 to 12 years of education. Capital gain has a value of 0 for 90% of the time and some outliers that go to 99,999 showing that most customer's had no gain in capital. Loss in capital is similarly distributed with 90% of values as 0 with a few outliers that go to 4356 max. hours.per.week has a particular normal distribution with a mean of 40.44 which is the typical average working hours per week in the USA. The correlation matrix shows that there is not much correlation between these numeric predictors with a max correlation of around 0.15 between education.num and hours.per.week.
+
+```{r histograms, boxplots and deciles}
+
+# histogram of age
+
+census %>% ggplot() +
+  geom_histogram(aes(x=age),binwidth = 20) +
+  ggtitle("Histogram of Customer's Age")
+
+# histogram of fnlwgt
+
+census %>% ggplot() +
+  geom_histogram(aes(x=fnlwgt),binwidth = 10) +
+  ggtitle("Histogram of fnlwgt")
+
+# histogram of education.num
+
+census %>% ggplot() +
+  geom_histogram(aes(x=education.num),binwidth = 10) +
+  ggtitle("Histogram of number of education years")
+
+# histogram of capital.gain
+
+census %>% ggplot() +
+  geom_histogram(aes(x=capital.gain),binwidth = 10) +
+  ggtitle("Histogram of Capital Gain")
+
+# histogram of capital.loss
+
+census %>% ggplot() +
+  geom_histogram(aes(x=capital.loss),binwidth = 10) +
+  ggtitle("Histogram of Capital Loss")
+
+# histogram of hours.per.week
+
+census %>% ggplot() +
+  geom_histogram(aes(x=hours.per.week),binwidth = 20) +
+  ggtitle("Histogram of Hours per week customer usually works")
+
+# boxplot of age
+
+census %>% ggplot() +
+  geom_boxplot(aes(x=age)) +
+  ggtitle("Boxplot of Customer's Age")
+
+# boxplot of fnlwgt
+
+census %>% ggplot() +
+  geom_boxplot(aes(x=fnlwgt)) +
+  ggtitle("Boxplot of fnlwgt")
+
+# boxplot of education.num
+
+census %>% ggplot() +
+  geom_boxplot(aes(x=education.num)) +
+  ggtitle("Boxplot of number of education years")
+
+# boxplot of capital.gain
+
+census %>% ggplot() +
+  geom_boxplot(aes(x=capital.gain)) +
+  ggtitle("Boxplot of Capital Gain")
+
+# boxplot of capital.loss
+
+census %>% ggplot() +
+  geom_boxplot(aes(x=capital.loss)) +
+  ggtitle("Boxplot of Capital Loss")
+
+# boxplot of hours.per.week
+
+census %>% ggplot() +
+  geom_boxplot(aes(x=hours.per.week)) +
+  ggtitle("Boxplot of Hours per week customer usually works")
+
+# deciles of all six numeric variables
+
+census %>% pull(age) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+census %>% pull(fnlwgt) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+census %>% pull(education.num) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+census %>% pull(capital.gain) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+census %>% pull(capital.loss) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+census %>% pull(hours.per.week) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+
+# Using cor and pairs.panels to compute correlation matrix and display correlations of the listed numeric six variables
+
+census %>% select(age, fnlwgt, education.num, capital.gain, capital.loss, hours.per.week) %>% cor()
+census %>% select(age, fnlwgt, education.num, capital.gain, capital.loss, hours.per.week) %>% pairs.panels()
+
+```
+
+
+## Data Exploration of factor variables
+
+This code chunk explores the factor variables in the census dataset, including y, workclass, education, marital.status, occupation, relationship, race, sex, and native.country. It calculates the count and percentage of each factor level and displays them in tables. Then, it creates bar plots for each factor variable to visualize their distributions. The bar plots help understand the distribution and frequency of each category within the factor variables.
+
+Results:
+Analysis shows a class imbalance for the target variable 'y' with an income of <=50k for 76% of the data and an income of >50k for the other 24% of the dataset. Boxplot highlights that most customers (about 70% of them) have a 'Private' workclass. For education levels, most customers are high school graduates followed by having some college experience which is followed by having a Bachelors degree. For marital status most customers are married-civ-spouse while the second majority is of clients that were never married.Occupation Type is mostly divided among the 15 levels with no class being too prominent than others. In the relationship column around 41% of customers had Husband entered in it. The race of customers in the dataset was predominantly white with 85% of the customers, while around two third of the customers in the dataset were male and about 90% of the dataset were native of United States.
+
+```{r Explorating factor variables - y, marital.status, occupation, etc.}
+
+
+# Showing the count value and percentage value of each factor and it's levels
+
+census %>% select(y) %>% table()
+census %>% select(y) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(workclass) %>% table()
+census %>% select(workclass) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(education) %>% table()
+census %>% select(education) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(marital.status) %>% table()
+census %>% select(marital.status) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(occupation) %>% table()
+census %>% select(occupation) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(relationship) %>% table()
+census %>% select(relationship) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(race) %>% table()
+census %>% select(race) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(sex) %>% table()
+census %>% select(sex) %>% table() %>% prop.table() %>% round(2) * 100
+
+census %>% select(native.country) %>% table()
+census %>% select(native.country) %>% table() %>% prop.table() %>% round(2) * 100
+
+# Bar plots of each of the factor variables
+
+census %>% ggplot() +
+  geom_bar(aes(x=y),position="dodge") +
+  ggtitle("Barplot of target variable 'y'")
+
+census %>% ggplot() +
+  geom_bar(aes(x=workclass),position="dodge") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text.y = element_text(angle = 0)) +
+  ggtitle("Barplot of Workclass")
+
+census %>% ggplot() +
+  geom_bar(aes(x=education),position="dodge") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text.y = element_text(angle = 0)) +
+  ggtitle("Barplot of Education")
+
+census %>% ggplot() +
+  geom_bar(aes(x=marital.status),position="dodge") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text.y = element_text(angle = 0)) +
+  ggtitle("Barplot of Marital Status")
+
+census %>% ggplot() +
+  geom_bar(aes(x=occupation),position="dodge") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text.y = element_text(angle = 0)) +
+  ggtitle("Barplot of Occupation Type")
+
+census %>% ggplot() +
+  geom_bar(aes(x=relationship),position="dodge") +
+  ggtitle("Barplot of Relationship")
+
+census %>% ggplot() +
+  geom_bar(aes(x=race),position="dodge") +
+  ggtitle("Barplot of Race")
+
+census %>% ggplot() +
+  geom_bar(aes(x=sex),position="dodge") +
+  ggtitle("Barplot of Sex")
+
+census %>% ggplot() +
+  geom_bar(aes(x=native.country),position="dodge") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text.y = element_text(angle = 0)) +
+  ggtitle("Barplot of Native Country")
+
+```
+
+
+## Exploratory analysis for multiple variables
+
+This code chunk visualizes relationships between variables in the census dataset. It starts with scatter plots for continuous variables like capital.gain vs. capital.loss and hours.per.week vs. education.num, where the color indicates the target variable y. Then, it creates histograms and bar plots for categorical variables like age, fnlwgt, race, sex, relationship, marital.status, workclass, education, occupation, and native.country, also segmented by y. Heatmaps are generated to display the distribution of counts based on combinations of variables such as native.country vs. y, occupation vs. y, workclass vs. y, and education vs. y, providing insights into how these variables relate to the target variable.
+
+Results:
+The majority class for the dataset is <=50k for 'y' with a percentage of 76% and >50k income with a percentage of 24%. From the first scatter plot we can deduce that customers that have a mediocre value of capital.gain and capital.loss have a greater chance of having an income of >50k. Similarly, it can be deduced from the second scatter plot that customer with higher education.num and hours.per.week have a higher chance of having an income of >50k. White Males have a higher chance of income >50k, similarly Male with relationship as Husband and Male with married-civ-spouse marital.status has a better chance of having an income of >50k.From the heatmaps it is difficult to get patterns as most light bars are due to the sheer volume of that level in the dataset but it still shows which category affects which level of the target variable 'y'.
+
+
+```{r Understand variable relationships }
+
+# Scatter plot between two continuous variable with target as color
+census %>% 
+  ggplot(mapping = aes(x = capital.gain, y = capital.loss, color = y)) +
+  geom_point() +
+  labs(title = "Scatterplot of Capital Gain vs Capital Loss by TARGET 'y'")
+
+# Histogram of age
+census %>% 
+  ggplot(mapping = aes(x = age, fill = y)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 30) +
+  labs(title = "Distribution of Age by TARGET 'y'",
+       x = "Age",
+       y = "Frequency",
+       fill = "y")
+
+# Histogram of fnlwgt
+census %>% 
+  ggplot(mapping = aes(x = fnlwgt, fill = y)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 30) +
+  labs(title = "Distribution of fnlwgt by TARGET 'y'",
+       x = "fnlwgt",
+       y = "Frequency",
+       fill = "y")
+
+# Scatter plot between two continuous variable with target as color
+census %>% 
+  ggplot(mapping = aes(x = hours.per.week, y = education.num, color = y)) +
+  geom_point() +
+  labs(title = "Scatterplot of Hours Worked per Week vs Number of Years of Education by 'y'")
+
+# Bar Chart between Sex & Race by TARGET 'y'
+
+census %>%
+  ggplot(mapping = aes(x = race, fill = y)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ sex) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text.y = element_text(angle = 0)) +
+  labs(title = "Distribution of Race and Sex of the Customer by TARGET 'y'",
+       x = "Race",
+       y = "Count",
+       fill = "y")
+
+# Heatmap between native.country and TARGET 'y'
+
+census %>%
+  group_by(native.country, y) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = native.country, y = y)) +
+  geom_tile(aes(fill = n)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(angle = 0)) +
+  labs(title = "Heatmap between Customer's Native Country and TARGET 'y'")
+
+# Heatmap between occupation and TARGET 'y'
+
+census %>%
+  group_by(occupation, y) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = occupation, y = y)) +
+  geom_tile(aes(fill = n)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(angle = 0)) +
+  labs(title = "Heatmap between Customer's Occupation and TARGET 'y'")
+
+# Bar Chart between Sex & Relationship by TARGET 'y'
+
+census %>%
+  ggplot(mapping = aes(x = relationship, fill = y)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ sex) +
+  labs(title = "Distribution of Sex & Relationship by TARGET 'y'",
+       x = "Relationship",
+       y = "Count",
+       fill = "y") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(angle = 0))
+
+# Bar Chart between Sex & Marital Status by TARGET 'y'
+
+census %>%
+  ggplot(mapping = aes(x = marital.status, fill = y)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ sex) +
+  labs(title = "Distribution of Sex & Marital Status by TARGET 'y'",
+       x = "Marital Status",
+       y = "Count",
+       fill = "y") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(angle = 0))
+
+# Heatmap between workclass and TARGET 'y'
+
+census %>%
+  group_by(workclass, y) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = workclass, y = y)) +
+  geom_tile(aes(fill = n)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(angle = 0)) +
+  labs(title = "Heatmap between Customer's Workclass and TARGET 'y'")
+
+# Heatmap between education and TARGET 'y'
+
+census %>%
+  group_by(education, y) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = education, y = y)) +
+  geom_tile(aes(fill = n)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.text.y = element_text(angle = 0)) +
+  labs(title = "Heatmap between Customer's Education Level and TARGET 'y'")
+
+```
+
+
+## List of all Supervised Models
+
+1. Decision Trees using C5.0(),
+2. Naïve Bayes Model,
+3. Linear Regression,
+4. Decision Tree (rpart),
+5. M5P (A model similar to decision trees),
+6. Neural Network Models (make_Weka_classifier()),
+7. Support Vector Machine (ksvm()),
+8. KNN (IBk) Model,
+9. SimpleKMeans(), and
+10. Apriori()
+
+For this project we have a categorical target variable i.e. a classification task with supervised learning. Out of this list above the models Linear Regression, M5P, SimpleKMeans(), and Apriori() are not suitable for classification tasks with a categorical target variable. Linear Regression and M5P are regression algorithms, SimpleKMeans() is used for clustering, and Apriori() is used for association rule mining. Therefore, the list can be narrowed down to:
+
+1. Decision Trees using C5.0(),
+2. Naïve Bayes Model,
+3. Decision Tree (rpart),
+4. Neural Network Models (make_Weka_classifier()),
+5. Support Vector Machine (ksvm()), and
+6. KNN (IBk) Model.
+
+# Data Preperation
+
+## Spliting Dataset into Training and Testing Sets
+
+This code prepares and partitions the census dataset for training and testing machine learning models. It begins by setting the seed for reproducibility and creating a 70-30 split, with 70% of the data allocated for the training set and 30% for the test set. The lengths and classes of the training set indexes are checked, then the dataset is split accordingly. The number of rows in both sets is displayed. Tables are generated to show the proportions of "yes" and "no" values in the target variable y for both the training and test sets. The code also checks for any missing values in both datasets. Finally, it prepares to generate multiple prediction evaluation metrics such as accuracy, precision, true positive rate, and F1 score using the rminer package.
+
+```{r data preperation and partition}
+
+set.seed(100)  #Creating data partition by using 70% of data for the training set and 30% for the test set
+census_train <- createDataPartition(census$y, p=0.7, list=FALSE)
+
+length(census_train)
+class(census_train)
+
+train_set <- census[census_train,]  #spliting the dataset using the indexes
+test_set <- census[-census_train,]
+
+train_set %>% nrow()  #Showing number of rows in both train and test sets
+test_set %>% nrow()
+
+train_set %>% select(y) %>% table() #Showing the proportion of yes and no in y for training set
+train_set %>% select(y) %>% table() %>% prop.table() %>% round(2) * 100
+
+test_set %>% select(y) %>% table() #Showing the proportion of yes and no in y for training set
+test_set %>% select(y) %>% table() %>% prop.table() %>% round(2) * 100
+
+# Generating multiple prediction evaluation metrics using rminer package
+
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+
+# Checking for NA Values in the train and test datasets
+
+any(is.na(train_set))
+any(is.na(test_set))
+
+```
+
+## Cross-validation function for numeric prediction models
+
+This R code defines a cross-validation function (cv_function) to evaluate model performance using 5-fold cross-validation. It takes a dataframe (df), target variable index (target), number of folds (nFolds), and evaluation metrics list (metrics_list). Then, it iterates through different prediction methods (MLP, ksvm, IBk, etc.), prints model summaries, computes evaluation metrics, and presents results in a table format.
+
+```{r Define a user-defined, named function for CV of a prediction method with control parameters}
+
+cv_function <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds) 
+  
+  cv_results <- lapply(folds, function(x)
+{
+  test_target <- df[x,target]
+  test_input <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  train_input <- df[-x,-target]
+   
+  pred_model <- prediction_method(train_target~.,train_input)
+  
+  pred <- predict(pred_model, test_input)
+# return saves performance results in cv_results[[i]]
+  return(mmetric(test_target,pred,metrics_list))
+})
+  
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  
+  colnames(cv_mean) <- "Mean"
+  
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  
+  colnames(cv_sd) <- "Sd"
+  
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  
+  kable(cv_all,digits=2)
+}
+
+```
+
+
+# Model Building
+
+## Simple Model Training and Testing for all selected models
+
+This code chunk trains and evaluates multiple machine learning models including Decision Trees (C5.0 and rpart), Naive Bayes, Multilayer Perceptron (NNM), Support Vector Machine (SVM), and k-Nearest Neighbors (KNN) on the prepared training and testing datasets.
+Each model's performance is evaluated using multiple metrics such as accuracy, precision, true positive rate, and F1 score. The code provides insight into how these models perform on both the training and test datasets, aiming to find the best-performing model for the given data.
+
+```{r Decision Trees, Naive Bayes, NNM, SVM and KNN.}
+
+# Using the train set to train a C5.0 model
+
+C5.0_model <- C5.0(formula = y ~ .,data = train_set, control = C5.0Control(CF = 0.005, earlyStopping = FALSE, noGlobalPruning = FALSE)) # Creating decision tree for CF = 0.005 for interpretability purposes and to get a balance between overfitting and underfitting.
+C5.0_model
+
+# Generating prediction for the C5.0 model for both the train and test set
+
+C5.0_model_train_predictions <- predict(C5.0_model,train_set)
+C5.0_model_test_predictions <- predict(C5.0_model,test_set)
+
+# Creating confusion matrix for both the train and test set data
+
+Confusion_Matrix_train_1 <- table(predicted = C5.0_model_train_predictions,
+                                  observed = train_set$y)
+Confusion_Matrix_train_1
+
+Confusion_Matrix_test_1 <- table(predicted = C5.0_model_test_predictions,
+                                  observed = test_set$y)
+Confusion_Matrix_test_1
+
+# Checking for different metrics of how the model performed on both the train and test datasets
+
+mmetric(train_set$y, C5.0_model_train_predictions, metric= metrics_list)
+mmetric(test_set$y, C5.0_model_test_predictions, metric = metrics_list)
+
+# Using the C5imp() function to see the least important predictors from the decision tree model
+
+C5imp(C5.0_model)
+
+# Creating a simple Naive Bayes Model from the training set
+
+naive_model <- naiveBayes(y ~ ., data = train_set)
+naive_model
+summary(naive_model)
+
+# Generating prediction for the simple naive bayes model for both the train and test set
+
+naive_model_train_predictions <- predict(naive_model,train_set)
+naive_model_test_predictions <- predict(naive_model,test_set)
+
+# Creating confusion matrix for both the train and test set data
+
+Confusion_Matrix_train_2 <- table(predicted = naive_model_train_predictions,
+                                  observed = train_set$y)
+Confusion_Matrix_train_2
+
+Confusion_Matrix_test_2 <- table(predicted = naive_model_test_predictions,
+                                  observed = test_set$y)
+Confusion_Matrix_test_2
+
+# Checking for accuracy of how the model performed on both the train and test datasets
+
+mmetric(train_set$y, naive_model_train_predictions, metric= metrics_list)
+mmetric(test_set$y, naive_model_test_predictions, metric = metrics_list)
+
+# Building Decision Trees (rpart) model using training dataset
+
+rpart_model <- rpart(y ~ ., data = train_set)
+rpart_model
+
+# Generating prediction for the default rpart model for both the train and test set
+
+rpart_model_train_predictions <- predict(rpart_model,train_set)
+rpart_model_test_predictions <- predict(rpart_model,test_set)
+
+# performance of predictions on training data
+mmetric(train_set$y,rpart_model_train_predictions,metrics_list)
+# performance of predictions on testing data 
+mmetric(test_set$y,rpart_model_test_predictions,metrics_list)
+
+# Designating a shortened name MLP for the MultilayerPerceptron ANN method in RWeka
+
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+# Creating a model with two hidden layer and tweaking the learning rate for ANN using MLP
+
+MLP_model <- MLP(y ~ .,data = train_set,control = Weka_control(L=0.05,M=0.2, N=500,H=2))
+MLP_model
+
+# Generating prediction for the two hidden layer ANN model for both the train and test set. We are limiting the hidden layers to two to avoid overfitting.
+
+MLP_model_train_predictions <- predict(MLP_model,train_set)
+MLP_model_test_predictions <- predict(MLP_model,test_set)
+
+# performance of predictions on training data
+mmetric(train_set$y,MLP_model_train_predictions,metrics_list)
+# performance of predictions on testing data 
+mmetric(test_set$y,MLP_model_test_predictions,metrics_list)
+
+# Creating a SVM model with kernel = "rbfdot" as we have less prior knowledge about the data distribution and since it is a classification task along with a cost of C = 5, not increasing the C value too much to avoid overfitting.
+
+SVM_model <- ksvm(y ~ ., data = train_set, kernel = "rbfdot", C = 5)
+SVM_model
+
+# Generating prediction for the default SVM model for both the train and test set
+
+SVM_model_train_predictions <- predict(SVM_model,train_set)
+SVM_model_test_predictions <- predict(SVM_model,test_set)
+
+# performance of predictions on training data
+mmetric(train_set$y,SVM_model_train_predictions,metrics_list)
+# performance of predictions on testing data 
+mmetric(test_set$y,SVM_model_test_predictions,metrics_list)
+
+# Creating a IBk model with X = TRUE
+
+IBK_model <- IBk(y ~ ., data = train_set, control = Weka_control(K=40,I=TRUE,X=TRUE))
+
+IBK_model
+
+# The Classifier has chosen K = 39 as best value to maximize ACC but this may cause more overfitting than underfitting as can be seen from the test set accuracy of 99.11%.
+
+# Generating prediction for the IBk model with X = TRUE for both the train and test set
+
+IBk_model_train_predictions <- predict(IBK_model,train_set)
+IBk_model_test_predictions <- predict(IBK_model,test_set)
+
+# performance of predictions on training data
+mmetric(train_set$y,IBk_model_train_predictions,metrics_list)
+# performance of predictions on testing data 
+mmetric(test_set$y,IBk_model_test_predictions,metrics_list)
+
+
+```
+
+
+## 5 fold cross-validation for all six models
+
+This code chunk performs 5-fold cross-validation to evaluate the performance of six different default models: C5.0 Decision Trees, Naive Bayes, rpart Decision Trees, Multilayer Perceptron (MLP), Support Vector Machine (ksvm), and k-Nearest Neighbors (IBk).
+Each model is evaluated using 5-fold cross-validation to assess its performance across different folds of the dataset. The cv_function calculates various evaluation metrics specified in the metrics_list. This process helps in understanding how well each model generalizes to new data and assists in selecting the most suitable model for the given task.
+
+```{r 5-fold cross validation on different default models}
+
+# Using the CV_Function to evaluate 5-fold model evaluation performance for all six selected models
+
+# Cross Validation for C5.0 Model
+
+df <- census
+target <- 15
+nFolds <- 5
+seedVal <- 500
+assign("prediction_method", C5.0)
+metrics_list <- metrics_list
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Cross Validation for Naive Bayes Model
+
+df <- census
+target <- 15
+nFolds <- 5
+seedVal <- 500
+assign("prediction_method", naiveBayes)
+metrics_list <- metrics_list
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Cross Validation for rpart Model
+
+df <- census
+target <- 15
+nFolds <- 5
+seedVal <- 500
+assign("prediction_method", rpart)
+metrics_list <- metrics_list
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Cross Validation for MLP Model
+
+df <- census
+target <- 15
+nFolds <- 5
+seedVal <- 500
+assign("prediction_method", MLP)
+metrics_list <- metrics_list
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Cross Validation for ksvm Model
+
+df <- census
+target <- 15
+nFolds <- 5
+seedVal <- 500
+assign("prediction_method", ksvm)
+metrics_list <- metrics_list
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Cross Validation for IBk Model
+
+df <- census
+target <- 15
+nFolds <- 5
+seedVal <- 500
+assign("prediction_method", IBk)
+metrics_list <- metrics_list
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+```
+
+
+# Reflections
+
+Write up your summary findings in a paragraph to conclude your analysis. Items to document:
+
+1. Model performance of each model built
+
+2. Which model performed the best/worst. Ideally use a table to make this easy to read. 
+
+```{r Model Performance Summary}
+
+# Creating a table to show the Accuracy for the initial models which were created by tweaking the hyperparameters and the mean accuracy of the models after doing 5-fold cross Validation.
+
+model_performance <- tibble(
+  Model = c("C5.0", "naive bayes", "rpart", "MLP", "SVM", "IBk"),
+  ACC = c(85.59, 82.48, 83.88, 84.33, 85.27, 83.56),
+  Mean_ACC = c(86.82, 82.82, 84.45, 83.05, 85.64, 79.3)
+)
+
+# Displaying the table
+print(model_performance)
+
+```
+
+The best performing model in terms of both Accuracy when the hyperparemeters were tweaked and the mean accuracy from the 5-fold cross validation is: C5.0 Decision Tree with an accuracy of 85.6% and a mean accuracy of 86.8%. The worst performing model when the hyperparameters were tweaked was naive bayes with an accuracy of 82.5% while the worst model after using the default models and doing a 5-fold cross validation was IBk with a mean accuracy of only 79.3%.
+
+3. Which features appear to be the most useful to predict y? If you had to choose just one feature to predict the target which would it be?
+
+According to the C5.0 model created with the highest accuracy, the most useful features to predict the target variable 'y' are: capital.gain followed by relationship and capital.loss. If I had to select one feature to predict the target 'y' it would be capital.gain.
+
+4. How much better was your best model than a majority rule classifier? Than a random classifier?
+
+The best model of C5.0 had a mean accuracy of 86.82% which is more than 10% higher than the 76% accuracy with a majority classifier and more than 36% than the 50% accuracy with a random classifier.
+
+5. Interpret what mistakes in predictions would mean to marketing financial products to individuals.
+
+
+
+5-1. If some with low income was categorized as having high income and a high income product was marketed to them what are the ramifications of this if they are unable to repay the loan?
+
+This can increase the risk of default for that customer and incur a loss of revenue due to that default for the company. We can introduce a new metric to calculate this cost:
+
+Loss of Revenue due to Default = (Loan Amount * APR)
+
+5-2. What if a high income individual has a less profitable financial product marketed to them because we accidentally predict them to have low income?
+
+This can reduce the profit made by the company as we would've extended the loan to them or would've extended a higher loan to them but didn't. We can quantify this cost with the following new metric:
+
+Opportunity Cost of Refusing Loan = Potential Profit from Interest + Goodwill Cost
+
+6. Was the model better at predicting those with low income or high income?
+
+Looking at the Confusion Matrix above, the C5.0 model was accurately predict the low income customers for around 96% of the time while it had an accuracy of only 52% when predicting high income clients. This output makes sense and is in line with our notion that the model usually prefers the majority class more when there is a class imbalance present.
+
