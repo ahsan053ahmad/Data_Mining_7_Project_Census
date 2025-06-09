@@ -4,7 +4,7 @@ This repository contains the final project submission for a supervised learning 
 
 ---
 
-### 🧩 Business Problem
+### Business Problem
 
 This project uses the UCI Adult Income Dataset, which includes demographic and employment-related data on over 32,000 individuals. The aim is to predict whether a person earns more than $50K per year — a binary classification task with a categorical target variable (y).
 
@@ -12,7 +12,7 @@ Several models from the original list (e.g., LinearRegression, M5P, SimpleKMeans
 
 ---
 
-### 📦 Dataset Overview
+### Dataset Overview
 
 The dataset contains **32,561 observations** and **15 variables**. The target variable is `y`, which represents income class:
 
@@ -28,7 +28,7 @@ This dataset presents common real-world challenges, including missing values, ca
 
 ---
 
-### 🎯 Project Objective
+### Project Objective
 
 This project was designed to:
 
@@ -65,7 +65,7 @@ The end-to-end machine learning workflow included:
 
 ---
 
-### 💡 Business Value
+### Business Value
 
 This project reflects a typical real-world scenario in HR analytics or government income modeling:
 
@@ -75,7 +75,7 @@ This project reflects a typical real-world scenario in HR analytics or governmen
 
 ---
 
-### 🚧 Challenges Encountered
+### Challenges Encountered
 
 - **Encoding and Scaling**: Different models required specific preprocessing (e.g., scaling for SVM and KNN).
 - **Model Complexity**: Neural networks and SVMs required careful tuning to avoid overfitting.
